@@ -16,10 +16,10 @@ import {
 import type { FurnitureItem, ItemDraft, LayoutRecord, PlannerStorageData, Rotation } from './types/planner';
 import { clampRectToBounds, getItemFootprint, getItemIssues } from './utils/geometry';
 import { makeId } from './utils/id';
+import { recenterPan, resolveRingMenuHighlight, toggleMobilePanel, type MobilePanel } from './utils/mobileInteractions';
 import { clampZoom, cmToPx, snapCmToGrid } from './utils/scale';
 
 type TabId = 'add' | 'edit' | 'items' | 'layouts';
-type MobilePanelId = Exclude<TabId, 'add'> | null;
 type RingMenuState = {
   screenX: number;
   screenY: number;
@@ -50,7 +50,7 @@ export default function App() {
   const [plannerData, setPlannerData] = useState<PlannerStorageData>(() => loadPlannerData());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(() => (window.innerWidth < 900 ? 'items' : 'add'));
-  const [mobilePanel, setMobilePanel] = useState<MobilePanelId>(null);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 16, y: 16 });
@@ -180,10 +180,7 @@ export default function App() {
 
     setSelectedItemId(null);
     setMobilePanel(null);
-    setPan((current) => ({
-      x: current.x + (centerScreenX - screenX),
-      y: current.y + (centerScreenY - screenY),
-    }));
+    setPan((current) => recenterPan(current, { x: screenX, y: screenY }, { x: centerScreenX, y: centerScreenY }));
     setRingMenu({
       screenX: centerScreenX,
       screenY: centerScreenY,
@@ -211,26 +208,12 @@ export default function App() {
 
       const dx = clientX - current.screenX;
       const dy = clientY - current.screenY;
-      const distance = Math.hypot(dx, dy);
-      if (distance < 48 || distance > 168) {
-        return current.highlightedLabel ? { ...current, highlightedLabel: null } : current;
-      }
-
-      let bestPreset = ITEM_PRESETS[0] ?? null;
-      let bestScore = Number.POSITIVE_INFINITY;
-      ITEM_PRESETS.forEach((preset, index) => {
-        const angle = (Math.PI * 2 * index) / ITEM_PRESETS.length - Math.PI / 2;
-        const radius = 94;
-        const itemX = current.screenX + Math.cos(angle) * radius;
-        const itemY = current.screenY + Math.sin(angle) * radius;
-        const score = Math.hypot(clientX - itemX, clientY - itemY);
-        if (score < bestScore) {
-          bestScore = score;
-          bestPreset = preset;
-        }
-      });
-
-      const highlightedLabel = bestScore <= 58 ? bestPreset?.label ?? null : null;
+      const highlighted = resolveRingMenuHighlight(
+        { x: clientX, y: clientY },
+        { x: current.screenX, y: current.screenY },
+        ITEM_PRESETS,
+      );
+      const highlightedLabel = highlighted?.label ?? null;
       return highlightedLabel === current.highlightedLabel ? current : { ...current, highlightedLabel };
     });
   };
@@ -625,7 +608,7 @@ export default function App() {
                 </span>
               </div>
               <div className="mobileSelectionActions">
-                <button className="secondaryButton" type="button" onClick={() => setActiveTab('edit')}>
+                <button className="secondaryButton" type="button" onClick={() => setMobilePanel('edit')}>
                   Details
                 </button>
                 <button className="secondaryButton" type="button" onClick={() => handleRotate(selectedItem.id)}>
@@ -714,18 +697,22 @@ export default function App() {
                 <button
                   className={`tabButton ${visibleMobilePanel === tabId ? 'tabButtonActive' : ''}`}
                   key={tabId}
+                  data-testid={`mobile-panel-${tabId}`}
                   type="button"
-                  onClick={() => setMobilePanel((current) => (current === tabId ? null : tabId))}
+                  onClick={() =>
+                    setMobilePanel((current) => toggleMobilePanel(current, tabId, Boolean(selectedItem)))
+                  }
                 >
                   {TAB_LABELS[tabId]}
                 </button>
               ))}
               <button
                 className={`tabButton ${visibleMobilePanel === 'edit' ? 'tabButtonActive' : ''}`}
+                data-testid="mobile-panel-edit"
                 type="button"
                 onClick={() => {
                   if (selectedItem) {
-                    setMobilePanel((current) => (current === 'edit' ? null : 'edit'));
+                    setMobilePanel((current) => toggleMobilePanel(current, 'edit', true));
                   }
                 }}
               >
@@ -756,6 +743,7 @@ export default function App() {
       {ringMenu ? (
         <div
           className="ringMenuOverlay"
+          data-testid="ring-menu-overlay"
           onClick={() => setRingMenu(null)}
           onPointerMove={(event) => handleRingMenuMove(event.clientX, event.clientY)}
           onPointerUp={handleRingMenuRelease}
@@ -776,6 +764,7 @@ export default function App() {
                 <button
                   key={preset.label}
                   className={`ringMenuItem ${ringMenu.highlightedLabel === preset.label ? 'ringMenuItemActive' : ''}`}
+                  data-testid={`ring-menu-item-${preset.label.toLowerCase().replace(/\s+/g, '-')}`}
                   style={{ transform: `translate(${Math.round(x)}px, ${Math.round(y)}px)` }}
                   type="button"
                   onClick={() => handleRingMenuSelect(preset)}

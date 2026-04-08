@@ -58,6 +58,8 @@ export function FloorPlanCanvas({
   const lastPinchDistanceRef = useRef<number | null>(null);
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const didPanRef = useRef(false);
   const planWidthPx = cmToPx(boundsCm.width);
   const planHeightPx = cmToPx(boundsCm.height);
   const isMobileViewport = viewportWidth < 900;
@@ -75,9 +77,41 @@ export function FloorPlanCanvas({
     }
   };
 
+  const startPanGesture = (clientX: number, clientY: number) => {
+    panStartRef.current = { x: clientX, y: clientY, panX: pan.x, panY: pan.y };
+    didPanRef.current = false;
+  };
+
+  const updatePanGesture = (clientX: number, clientY: number) => {
+    const current = panStartRef.current;
+    if (!current) {
+      return;
+    }
+
+    const deltaX = clientX - current.x;
+    const deltaY = clientY - current.y;
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+      didPanRef.current = true;
+    }
+
+    onPanChange({
+      x: current.panX + deltaX,
+      y: current.panY + deltaY,
+    });
+  };
+
+  const endPanGesture = () => {
+    panStartRef.current = null;
+  };
+
   const handleBackgroundActivate = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (longPressTriggeredRef.current) {
       longPressTriggeredRef.current = false;
+      return;
+    }
+
+    if (didPanRef.current) {
+      didPanRef.current = false;
       return;
     }
 
@@ -120,6 +154,7 @@ export function FloorPlanCanvas({
     event.evt.preventDefault();
     longPressTriggeredRef.current = false;
     clearLongPress();
+    startPanGesture(touch.clientX, touch.clientY);
     const clientX = touch.clientX;
     const clientY = touch.clientY;
     longPressTimeoutRef.current = window.setTimeout(() => {
@@ -143,16 +178,30 @@ export function FloorPlanCanvas({
   const handleTouchMove = (event: KonvaEventObject<TouchEvent>) => {
     const stage = event.target.getStage();
     const touches = event.evt.touches;
-    if (!stage || touches.length !== 2) {
-      clearLongPress();
+    if (!stage || touches.length === 0) {
       return;
     }
 
-    event.evt.preventDefault();
+    if (touches.length === 1) {
+      const touch = touches[0];
+      if (!touch) {
+        return;
+      }
 
-    if (stage.isDragging()) {
-      stage.stopDrag();
+      if (panStartRef.current) {
+        const deltaX = touch.clientX - panStartRef.current.x;
+        const deltaY = touch.clientY - panStartRef.current.y;
+        if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+          clearLongPress();
+        }
+        updatePanGesture(touch.clientX, touch.clientY);
+      }
+      return;
     }
+
+    clearLongPress();
+    event.evt.preventDefault();
+    endPanGesture();
 
     const first = touches[0];
     const second = touches[1];
@@ -192,10 +241,32 @@ export function FloorPlanCanvas({
     clearLongPress();
     lastPinchCenterRef.current = null;
     lastPinchDistanceRef.current = null;
+    endPanGesture();
+  };
+
+  const handleMouseDown = (event: KonvaEventObject<MouseEvent>) => {
+    const stage = event.target.getStage();
+    if (!stage || event.target !== stage || pendingPlacement) {
+      return;
+    }
+
+    startPanGesture(event.evt.clientX, event.evt.clientY);
+  };
+
+  const handleMouseMove = (event: KonvaEventObject<MouseEvent>) => {
+    if (!panStartRef.current) {
+      return;
+    }
+
+    updatePanGesture(event.evt.clientX, event.evt.clientY);
+  };
+
+  const handleMouseUp = () => {
+    endPanGesture();
   };
 
   return (
-    <div className="canvasShell">
+    <div className="canvasShell" data-testid="canvas-shell">
       <Stage
         ref={stageRef}
         width={stageWidth}
@@ -204,9 +275,10 @@ export function FloorPlanCanvas({
         scaleY={zoom}
         x={pan.x}
         y={pan.y}
-        draggable={!pendingPlacement}
-        onDragEnd={(event) => onPanChange({ x: event.target.x(), y: event.target.y() })}
         onContextMenu={(event) => event.evt.preventDefault()}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onClick={handleBackgroundActivate}
         onTap={handleBackgroundActivate}
         onTouchStart={handleTouchStart}
@@ -299,15 +371,13 @@ export function FloorPlanCanvas({
                 draggable={!item.locked && !pendingPlacement}
                 onMouseDown={(event) => {
                   event.cancelBubble = true;
-                  if (stageRef.current?.isDragging()) {
-                    stageRef.current.stopDrag();
-                  }
+                  endPanGesture();
+                  clearLongPress();
                 }}
                 onTouchStart={(event) => {
                   event.cancelBubble = true;
-                  if (stageRef.current?.isDragging()) {
-                    stageRef.current.stopDrag();
-                  }
+                  endPanGesture();
+                  clearLongPress();
                 }}
                 onClick={() => {
                   if (!pendingPlacement) {
@@ -321,18 +391,12 @@ export function FloorPlanCanvas({
                 }}
                 onDragStart={(event) => {
                   event.cancelBubble = true;
-                  if (stageRef.current) {
-                    stageRef.current.stopDrag();
-                    stageRef.current.draggable(false);
-                  }
+                  endPanGesture();
                 }}
                 onDragMove={(event) => {
                   event.cancelBubble = true;
                 }}
                 onDragEnd={(event) => {
-                  if (stageRef.current) {
-                    stageRef.current.draggable(!pendingPlacement);
-                  }
                   onMoveItem(item.id, pxToCm(event.target.x()), pxToCm(event.target.y()));
                 }}
                 x={x}
