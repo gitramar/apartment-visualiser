@@ -1,32 +1,24 @@
-# Prerequisites
-*.d
+# Dependencies
+node_modules/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Build output
+dist/
 
-# Precompiled Headers
-*.gch
-*.pch
+# TypeScript build info
+*.tsbuildinfo
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Vite / Vitest cache
+.vite/
+node_modules/.vite/
 
-# Fortran module files
-*.mod
-*.smod
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
