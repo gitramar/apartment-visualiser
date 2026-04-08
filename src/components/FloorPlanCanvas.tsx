@@ -22,6 +22,7 @@ interface FloorPlanCanvasProps {
   onMoveItem: (itemId: string, xCm: number, yCm: number) => void;
   onPanChange: (pan: { x: number; y: number }) => void;
   onZoomChange: (zoom: number) => void;
+  onOpenRingMenu: (screenX: number, screenY: number, xCm: number, yCm: number) => void;
   onPlaceItem: (xCm: number, yCm: number) => void;
 }
 
@@ -42,11 +43,14 @@ export function FloorPlanCanvas({
   onMoveItem,
   onPanChange,
   onZoomChange,
+  onOpenRingMenu,
   onPlaceItem,
 }: FloorPlanCanvasProps) {
   const stageRef = useRef<import('konva/lib/Stage').Stage | null>(null);
   const lastPinchCenterRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistanceRef = useRef<number | null>(null);
+  const longPressTimeoutRef = useRef<number | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const planWidthPx = cmToPx(boundsCm.width);
   const planHeightPx = cmToPx(boundsCm.height);
   const isMobileViewport = viewportWidth < 900;
@@ -57,8 +61,16 @@ export function FloorPlanCanvas({
       : Math.max(296, viewportWidth - 48);
   const stageHeight = isFullscreen ? viewportHeight : isMobileViewport ? 380 : 520;
 
-  const handleBackgroundClick = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if ('touches' in event.evt && event.evt.touches.length > 1) {
+  const clearLongPress = () => {
+    if (longPressTimeoutRef.current) {
+      window.clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleBackgroundActivate = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
       return;
     }
 
@@ -87,10 +99,37 @@ export function FloorPlanCanvas({
     onSelectItem(null);
   };
 
+  const handleTouchStart = (event: KonvaEventObject<TouchEvent>) => {
+    if (event.target !== event.target.getStage() || pendingPlacement) {
+      return;
+    }
+
+    const stage = event.target.getStage();
+    const touch = event.evt.touches[0];
+    if (!stage || !touch || event.evt.touches.length !== 1) {
+      return;
+    }
+
+    longPressTriggeredRef.current = false;
+    clearLongPress();
+    const clientX = touch.clientX;
+    const clientY = touch.clientY;
+    longPressTimeoutRef.current = window.setTimeout(() => {
+      const containerRect = stage.container().getBoundingClientRect();
+      const localX = clientX - containerRect.left;
+      const localY = clientY - containerRect.top;
+      const xCm = pxToCm((localX - stage.x()) / stage.scaleX());
+      const yCm = pxToCm((localY - stage.y()) / stage.scaleY());
+      longPressTriggeredRef.current = true;
+      onOpenRingMenu(clientX, clientY, xCm, yCm);
+    }, 380);
+  };
+
   const handleTouchMove = (event: KonvaEventObject<TouchEvent>) => {
     const stage = event.target.getStage();
     const touches = event.evt.touches;
     if (!stage || touches.length !== 2) {
+      clearLongPress();
       return;
     }
 
@@ -135,6 +174,7 @@ export function FloorPlanCanvas({
   };
 
   const handleTouchEnd = () => {
+    clearLongPress();
     lastPinchCenterRef.current = null;
     lastPinchDistanceRef.current = null;
   };
@@ -151,8 +191,9 @@ export function FloorPlanCanvas({
         y={pan.y}
         draggable={!pendingPlacement}
         onDragEnd={(event) => onPanChange({ x: event.target.x(), y: event.target.y() })}
-        onMouseDown={handleBackgroundClick}
-        onTouchStart={handleBackgroundClick}
+        onClick={handleBackgroundActivate}
+        onTap={handleBackgroundActivate}
+        onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import type { ItemDraft } from '../types/planner';
 import { validateItemDraft } from '../utils/validation';
 
-const PRESETS = [
+export const ITEM_PRESETS = [
   { label: 'Sofa', widthCm: '220', heightCm: '95', color: '#5f8f6e' },
   { label: 'Bed', widthCm: '180', heightCm: '200', color: '#7897c0' },
   { label: 'TV Bench', widthCm: '160', heightCm: '40', color: '#9d7d5f' },
@@ -68,7 +68,7 @@ export function ItemForm({ nextItemLabel, onAdd, compactMode = false, onPickPres
   return (
     <form className="panelForm" onSubmit={handleSubmit}>
       <div className={compactMode ? 'presetGrid' : 'presetRow'}>
-        {PRESETS.map((preset) => (
+        {ITEM_PRESETS.map((preset) => (
           <button
             className={compactMode ? 'presetCardButton' : 'chipButton'}
             key={preset.label}

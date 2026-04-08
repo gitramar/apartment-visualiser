@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FloorPlanCanvas } from './components/FloorPlanCanvas';
 import { ItemEditor } from './components/ItemEditor';
-import { ItemForm } from './components/ItemForm';
+import { ItemForm, ITEM_PRESETS } from './components/ItemForm';
 import { ItemList } from './components/ItemList';
 import { LayoutManager } from './components/LayoutManager';
 import { CM_PER_GRID, floorPlanBoundsCm, floorPlanGuides, floorPlanWalls } from './data/floorPlan';
@@ -19,6 +19,14 @@ import { makeId } from './utils/id';
 import { clampZoom, cmToPx, snapCmToGrid } from './utils/scale';
 
 type TabId = 'add' | 'edit' | 'items' | 'layouts';
+type MobilePanelId = Exclude<TabId, 'add'> | null;
+type RingMenuState = {
+  screenX: number;
+  screenY: number;
+  xCm: number;
+  yCm: number;
+  highlightedLabel: string | null;
+};
 
 const TAB_LABELS: Record<TabId, string> = {
   add: 'Add',
@@ -42,6 +50,7 @@ export default function App() {
   const [plannerData, setPlannerData] = useState<PlannerStorageData>(() => loadPlannerData());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(() => (window.innerWidth < 900 ? 'items' : 'add'));
+  const [mobilePanel, setMobilePanel] = useState<MobilePanelId>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 16, y: 16 });
@@ -49,6 +58,7 @@ export default function App() {
   const [viewportWidth, setViewportWidth] = useState<number>(() => window.innerWidth);
   const [viewportHeight, setViewportHeight] = useState<number>(() => window.innerHeight);
   const [pendingPlacement, setPendingPlacement] = useState<ItemDraft | null>(null);
+  const [ringMenu, setRingMenu] = useState<RingMenuState | null>(null);
   const isMobileViewport = viewportWidth < 900;
 
   useEffect(() => {
@@ -83,6 +93,13 @@ export default function App() {
     }
   }, [activeLayout.items, selectedItemId]);
 
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setMobilePanel(null);
+      setRingMenu(null);
+    }
+  }, [isMobileViewport]);
+
   const applyItems = (transform: (items: FurnitureItem[]) => FurnitureItem[]) => {
     setPlannerData((current) =>
       updateLayout(current, activeLayout.id, (layout) => ({
@@ -93,40 +110,9 @@ export default function App() {
     );
   };
 
-  const handleAddItem = (draft: ItemDraft) => {
-    const item: FurnitureItem = {
-      id: makeId('item'),
-      label: draft.label.trim() || nextItemLabel,
-      widthCm: Number(draft.widthCm),
-      heightCm: Number(draft.heightCm),
-      color: draft.color.trim(),
-      xCm: 25,
-      yCm: 25,
-      rotation: 0,
-    };
-
-    applyItems((items) => [...items, item]);
-    setSelectedItemId(item.id);
-    if (isMobileViewport) {
-      setActiveTab('edit');
-    }
-  };
-
-  const handlePreparePlacement = (draft: ItemDraft) => {
-    setPendingPlacement(draft);
-    setSelectedItemId(null);
-    if (isMobileViewport) {
-      setActiveTab('items');
-    }
-  };
-
-  const handlePlacePendingItem = (xCm: number, yCm: number) => {
-    if (!pendingPlacement) {
-      return;
-    }
-
-    const widthCm = Number(pendingPlacement.widthCm);
-    const heightCm = Number(pendingPlacement.heightCm);
+  const createItemAt = (draft: ItemDraft, xCm: number, yCm: number, selectItem = true) => {
+    const widthCm = Number(draft.widthCm);
+    const heightCm = Number(draft.heightCm);
     const clamped = clampRectToBounds(
       {
         xCm: snapCmToGrid(xCm - widthCm / 2),
@@ -140,18 +126,106 @@ export default function App() {
 
     const item: FurnitureItem = {
       id: makeId('item'),
-      label: pendingPlacement.label.trim() || nextItemLabel,
+      label: draft.label.trim() || nextItemLabel,
       widthCm,
       heightCm,
-      color: pendingPlacement.color.trim(),
+      color: draft.color.trim(),
       xCm: clamped.xCm,
       yCm: clamped.yCm,
       rotation: 0,
     };
 
     applyItems((items) => [...items, item]);
+    if (selectItem) {
+      setSelectedItemId(item.id);
+      if (isMobileViewport) {
+        setMobilePanel('edit');
+      }
+    }
+  };
+
+  const handleAddItem = (draft: ItemDraft) => {
+    createItemAt(draft, 25 + Number(draft.widthCm) / 2, 25 + Number(draft.heightCm) / 2);
+  };
+
+  const handlePreparePlacement = (draft: ItemDraft) => {
+    setPendingPlacement(draft);
+    setSelectedItemId(null);
+    if (isMobileViewport) {
+      setMobilePanel(null);
+    }
+  };
+
+  const handlePlacePendingItem = (xCm: number, yCm: number) => {
+    if (!pendingPlacement) {
+      return;
+    }
+
+    createItemAt(pendingPlacement, xCm, yCm, false);
     setSelectedItemId(null);
     setPendingPlacement(null);
+  };
+
+  const handleOpenRingMenu = (screenX: number, screenY: number, xCm: number, yCm: number) => {
+    if (!isMobileViewport || pendingPlacement) {
+      return;
+    }
+
+    setSelectedItemId(null);
+    setMobilePanel(null);
+    setRingMenu({ screenX, screenY, xCm, yCm, highlightedLabel: null });
+  };
+
+  const handleRingMenuSelect = (draft: ItemDraft | null) => {
+    if (!ringMenu || !draft) {
+      setRingMenu(null);
+      return;
+    }
+
+    createItemAt(draft, ringMenu.xCm, ringMenu.yCm, false);
+    setRingMenu(null);
+  };
+
+  const handleRingMenuMove = (clientX: number, clientY: number) => {
+    setRingMenu((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const dx = clientX - current.screenX;
+      const dy = clientY - current.screenY;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 48 || distance > 168) {
+        return current.highlightedLabel ? { ...current, highlightedLabel: null } : current;
+      }
+
+      let bestPreset = ITEM_PRESETS[0] ?? null;
+      let bestScore = Number.POSITIVE_INFINITY;
+      ITEM_PRESETS.forEach((preset, index) => {
+        const angle = (Math.PI * 2 * index) / ITEM_PRESETS.length - Math.PI / 2;
+        const radius = 94;
+        const itemX = current.screenX + Math.cos(angle) * radius;
+        const itemY = current.screenY + Math.sin(angle) * radius;
+        const score = Math.hypot(clientX - itemX, clientY - itemY);
+        if (score < bestScore) {
+          bestScore = score;
+          bestPreset = preset;
+        }
+      });
+
+      const highlightedLabel = bestScore <= 58 ? bestPreset?.label ?? null : null;
+      return highlightedLabel === current.highlightedLabel ? current : { ...current, highlightedLabel };
+    });
+  };
+
+  const handleRingMenuRelease = () => {
+    if (!ringMenu?.highlightedLabel) {
+      setRingMenu(null);
+      return;
+    }
+
+    const preset = ITEM_PRESETS.find((entry) => entry.label === ringMenu.highlightedLabel) ?? null;
+    handleRingMenuSelect(preset);
   };
 
   const handleItemChange = (itemId: string, patch: Partial<FurnitureItem>) => {
@@ -323,6 +397,7 @@ export default function App() {
     setPlannerData(parsed.data);
     setSelectedItemId(null);
     setActiveTab('layouts');
+    setMobilePanel('layouts');
   };
 
   const selectedItemWarning = selectedItem
@@ -336,13 +411,13 @@ export default function App() {
   const handleSelectItem = (itemId: string | null) => {
     setSelectedItemId(itemId);
     if (itemId && isMobileViewport) {
-      setActiveTab('edit');
+      setMobilePanel('edit');
     }
   };
 
   const closeMobilePanel = () => {
     if (isMobileViewport) {
-      setActiveTab('items');
+      setMobilePanel(null);
     }
   };
 
@@ -374,14 +449,14 @@ export default function App() {
     });
   }, [isFullscreen, viewportWidth, viewportHeight]);
 
+  const visibleMobilePanel = mobilePanel;
+
   const mobilePanelTitle =
-    activeTab === 'add'
-      ? 'Add Furniture'
-      : activeTab === 'edit'
+    visibleMobilePanel === 'edit'
         ? selectedItem
           ? selectedItem.label
           : 'Edit Item'
-        : activeTab === 'items'
+        : visibleMobilePanel === 'items'
           ? 'Items'
           : 'Layouts';
 
@@ -411,7 +486,11 @@ export default function App() {
           selectedItemId={selectedItemId}
           onSelect={(itemId) => {
             setSelectedItemId(itemId);
-            setActiveTab('edit');
+            if (isMobileViewport) {
+              setMobilePanel('edit');
+            } else {
+              setActiveTab('edit');
+            }
           }}
         />
       ) : null}
@@ -424,7 +503,7 @@ export default function App() {
             setPlannerData((current) => ({ ...current, activeLayoutId: layoutId }));
             setSelectedItemId(null);
             if (isMobileViewport) {
-              setActiveTab('items');
+              setMobilePanel(null);
             }
           }}
           onCreate={handleCreateLayout}
@@ -497,6 +576,7 @@ export default function App() {
             onMoveItem={handleMoveItem}
             onPanChange={setPan}
             onZoomChange={handleZoomChange}
+            onOpenRingMenu={handleOpenRingMenu}
             onPlaceItem={handlePlacePendingItem}
           />
 
@@ -547,6 +627,7 @@ export default function App() {
 
         {isFullscreen ? null : isMobileViewport ? (
           <>
+            {visibleMobilePanel ? (
             <div className="mobilePanelSheet">
               <div className="mobileSheetHandle" />
               <div className="mobileSheetHeader">
@@ -555,27 +636,84 @@ export default function App() {
                   <button className="secondaryButton mobileCloseButton" type="button" onClick={() => setIsFullscreen(true)}>
                     Full Screen
                   </button>
-                  {activeTab !== 'items' ? (
+                  {visibleMobilePanel !== 'items' ? (
                     <button className="secondaryButton mobileCloseButton" type="button" onClick={closeMobilePanel}>
                       Close
                     </button>
                   ) : null}
                 </div>
               </div>
-              {panelContent}
+              {visibleMobilePanel === 'items'
+                ? (
+                  <div className="tabPanel">
+                    <ItemList
+                      items={activeLayout.items}
+                      selectedItemId={selectedItemId}
+                      onSelect={(itemId) => {
+                        setSelectedItemId(itemId);
+                        setMobilePanel('edit');
+                      }}
+                    />
+                  </div>
+                )
+                : visibleMobilePanel === 'edit'
+                  ? (
+                    <div className="tabPanel">
+                      <ItemEditor
+                        item={selectedItem}
+                        warning={selectedItemWarning}
+                        onChange={handleItemChange}
+                        onRotate={handleRotate}
+                        onDuplicate={handleDuplicateItem}
+                        onDelete={handleDeleteItem}
+                      />
+                    </div>
+                  )
+                  : (
+                    <div className="tabPanel">
+                      <LayoutManager
+                        layouts={plannerData.layouts}
+                        activeLayoutId={plannerData.activeLayoutId}
+                        importError={importError}
+                        onSelect={(layoutId) => {
+                          setPlannerData((current) => ({ ...current, activeLayoutId: layoutId }));
+                          setSelectedItemId(null);
+                          setMobilePanel(null);
+                        }}
+                        onCreate={handleCreateLayout}
+                        onRename={handleRenameLayout}
+                        onDuplicate={handleDuplicateLayout}
+                        onDelete={handleDeleteLayout}
+                        onExport={() => exportPlannerData(plannerData)}
+                        onImport={handleImport}
+                      />
+                    </div>
+                  )}
             </div>
+            ) : null}
 
             <nav className="mobileBottomBar" aria-label="Planner actions">
-              {(['add', 'edit', 'items', 'layouts'] as TabId[]).map((tabId) => (
+              {(['items', 'layouts'] as const).map((tabId) => (
                 <button
-                  className={`tabButton ${activeTab === tabId ? 'tabButtonActive' : ''}`}
+                  className={`tabButton ${visibleMobilePanel === tabId ? 'tabButtonActive' : ''}`}
                   key={tabId}
                   type="button"
-                  onClick={() => setActiveTab(tabId)}
+                  onClick={() => setMobilePanel((current) => (current === tabId ? null : tabId))}
                 >
                   {TAB_LABELS[tabId]}
                 </button>
               ))}
+              <button
+                className={`tabButton ${visibleMobilePanel === 'edit' ? 'tabButtonActive' : ''}`}
+                type="button"
+                onClick={() => {
+                  if (selectedItem) {
+                    setMobilePanel((current) => (current === 'edit' ? null : 'edit'));
+                  }
+                }}
+              >
+                Selected
+              </button>
             </nav>
           </>
         ) : (
@@ -597,6 +735,52 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {ringMenu ? (
+        <div
+          className="ringMenuOverlay"
+          onClick={() => setRingMenu(null)}
+          onPointerMove={(event) => handleRingMenuMove(event.clientX, event.clientY)}
+          onPointerUp={handleRingMenuRelease}
+          onPointerCancel={() => setRingMenu(null)}
+        >
+          <div
+            className="ringMenu"
+            style={{ left: ringMenu.screenX, top: ringMenu.screenY }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {ITEM_PRESETS.map((preset, index) => {
+              const angle = (Math.PI * 2 * index) / ITEM_PRESETS.length - Math.PI / 2;
+              const radius = 94;
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
+
+              return (
+                <button
+                  key={preset.label}
+                  className={`ringMenuItem ${ringMenu.highlightedLabel === preset.label ? 'ringMenuItemActive' : ''}`}
+                  style={{ transform: `translate(${Math.round(x)}px, ${Math.round(y)}px)` }}
+                  type="button"
+                  onClick={() => handleRingMenuSelect(preset)}
+                >
+                  <span className="ringMenuGlyph">
+                    {preset.label
+                      .split(' ')
+                      .map((part) => part[0])
+                      .join('')
+                      .slice(0, 2)}
+                  </span>
+                  <span className="ringMenuSwatch" style={{ background: preset.color }} />
+                  <span>{preset.label}</span>
+                </button>
+              );
+            })}
+            <button className="ringMenuCenter" type="button" onClick={() => setRingMenu(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
