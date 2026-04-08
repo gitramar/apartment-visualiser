@@ -20,8 +20,6 @@ interface FloorPlanCanvasProps {
   onPanChange: (pan: { x: number; y: number }) => void;
 }
 
-const STAGE_HEIGHT = 520;
-
 export function FloorPlanCanvas({
   boundsCm,
   wallSegments,
@@ -39,7 +37,9 @@ export function FloorPlanCanvas({
 }: FloorPlanCanvasProps) {
   const planWidthPx = cmToPx(boundsCm.width);
   const planHeightPx = cmToPx(boundsCm.height);
-  const stageWidth = viewportWidth > 1024 ? Math.min(viewportWidth - 420, 1100) : Math.max(320, viewportWidth - 24);
+  const isMobileViewport = viewportWidth < 900;
+  const stageWidth = viewportWidth > 1024 ? Math.min(viewportWidth - 420, 1100) : Math.max(296, viewportWidth - 48);
+  const stageHeight = isMobileViewport ? 380 : 520;
 
   const handleBackgroundClick = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (event.target === event.target.getStage()) {
@@ -51,7 +51,7 @@ export function FloorPlanCanvas({
     <div className="canvasShell">
       <Stage
         width={stageWidth}
-        height={STAGE_HEIGHT}
+        height={stageHeight}
         scaleX={zoom}
         scaleY={zoom}
         x={pan.x}

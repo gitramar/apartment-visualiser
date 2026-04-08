@@ -4,7 +4,7 @@ import { ItemEditor } from './components/ItemEditor';
 import { ItemForm } from './components/ItemForm';
 import { ItemList } from './components/ItemList';
 import { LayoutManager } from './components/LayoutManager';
-import { CM_PER_GRID, floorPlanBoundsCm, floorPlanDebug, floorPlanGuides, floorPlanWalls } from './data/floorPlan';
+import { CM_PER_GRID, floorPlanBoundsCm, floorPlanGuides, floorPlanWalls } from './data/floorPlan';
 import {
   createDefaultStorageData,
   createEmptyLayout,
@@ -282,10 +282,17 @@ export default function App() {
         : null
     : null;
 
+  const handleSelectItem = (itemId: string | null) => {
+    setSelectedItemId(itemId);
+    if (itemId && viewportWidth < 900) {
+      setActiveTab('edit');
+    }
+  };
+
   return (
     <div className="appShell">
       <header className="topBar">
-        <div>
+        <div className="topBarTitle">
           <p className="eyebrow">Apartment Layout Planner</p>
           <h1>{activeLayout.name}</h1>
         </div>
@@ -293,13 +300,15 @@ export default function App() {
           <button className={panMode ? 'secondaryButton isActive' : 'secondaryButton'} type="button" onClick={() => setPanMode((current) => !current)}>
             {panMode ? 'Canvas Pan On' : 'Pan Canvas'}
           </button>
-          <button className="secondaryButton" type="button" onClick={() => setZoom((current) => clampZoom(current - 0.2))}>
-            -
-          </button>
-          <span className="zoomReadout">{Math.round(zoom * 100)}%</span>
-          <button className="secondaryButton" type="button" onClick={() => setZoom((current) => clampZoom(current + 0.2))}>
-            +
-          </button>
+          <div className="zoomControls">
+            <button className="secondaryButton zoomButton" type="button" onClick={() => setZoom((current) => clampZoom(current - 0.2))}>
+              -
+            </button>
+            <span className="zoomReadout">{Math.round(zoom * 100)}%</span>
+            <button className="secondaryButton zoomButton" type="button" onClick={() => setZoom((current) => clampZoom(current + 0.2))}>
+              +
+            </button>
+          </div>
           <button className="secondaryButton" type="button" onClick={() => { setZoom(1); setPan({ x: 16, y: 16 }); }}>
             Reset View
           </button>
@@ -324,15 +333,10 @@ export default function App() {
             pan={pan}
             panMode={panMode}
             itemWarnings={itemIssues}
-            onSelectItem={setSelectedItemId}
+            onSelectItem={handleSelectItem}
             onMoveItem={handleMoveItem}
             onPanChange={setPan}
           />
-          <div className="planNotes">
-            {floorPlanDebug.notes.map((note) => (
-              <p key={note}>{note}</p>
-            ))}
-          </div>
         </section>
 
         <section className="controlPanel">

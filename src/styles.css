@@ -66,6 +66,10 @@ button {
   flex-wrap: wrap;
 }
 
+.topBarTitle {
+  min-width: 0;
+}
+
 .topBar h1 {
   margin: 0;
   font-size: 1.35rem;
@@ -98,6 +102,19 @@ button {
   flex-wrap: wrap;
 }
 
+.topActions {
+  align-items: center;
+}
+
+.zoomControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .plannerLayout {
   display: grid;
   gap: 12px;
@@ -108,10 +125,16 @@ button {
 }
 
 .canvasMeta {
-  justify-content: space-between;
+  justify-content: flex-start;
   color: var(--ink-soft);
   font-size: 0.9rem;
   margin-bottom: 12px;
+}
+
+.canvasMeta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .canvasShell {
@@ -126,6 +149,7 @@ button {
   position: sticky;
   bottom: 12px;
   padding: 12px;
+  z-index: 10;
 }
 
 .tabRow {
@@ -150,6 +174,7 @@ button {
 
 .tabButton {
   min-width: 84px;
+  white-space: nowrap;
 }
 
 .tabButtonActive,
@@ -276,7 +301,6 @@ input {
 .warningBanner,
 .fieldError,
 .emptyState,
-.planNotes p,
 .zoomReadout {
   margin: 0;
 }
@@ -294,17 +318,14 @@ input {
 }
 
 .emptyState,
-.planNotes p,
 .zoomReadout,
 .toggleRow {
   color: var(--ink-soft);
 }
 
-.planNotes {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-  font-size: 0.9rem;
+.zoomReadout {
+  min-width: 4ch;
+  text-align: center;
 }
 
 @media (min-width: 900px) {
@@ -321,5 +342,93 @@ input {
   .twoCol {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  .appShell {
+    padding: 10px 10px calc(108px + env(safe-area-inset-bottom));
+  }
+
+  .topBar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin: 0 -10px 10px;
+    padding: 14px 10px 12px;
+    backdrop-filter: blur(14px);
+  }
+
+  .topBar h1 {
+    font-size: 1.1rem;
+  }
+
+  .topActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topActions > .secondaryButton:first-child {
+    width: 100%;
+  }
+
+  .zoomControls {
+    justify-self: end;
+  }
+
+  .zoomButton {
+    min-width: 44px;
+    padding-inline: 0;
+  }
+
+  .topActions > .secondaryButton:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .canvasPanel,
+  .controlPanel {
+    border-radius: 20px;
+  }
+
+  .canvasPanel {
+    padding: 10px;
+  }
+
+  .canvasMeta {
+    gap: 6px;
+    font-size: 0.82rem;
+    margin-bottom: 10px;
+  }
+
+  .controlPanel {
+    margin-top: 4px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    bottom: 0;
+    margin-left: -10px;
+    margin-right: -10px;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(18, 24, 30, 0.98);
+    backdrop-filter: blur(18px);
+  }
+
+  .tabRow {
+    gap: 6px;
+    margin: 0 -2px;
+    padding-inline: 2px;
+    scrollbar-width: none;
+  }
+
+  .tabRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabButton {
+    flex: 1 0 auto;
+    min-width: 72px;
+    padding: 10px 12px;
   }
 }
