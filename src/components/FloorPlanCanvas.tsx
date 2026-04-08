@@ -22,7 +22,14 @@ interface FloorPlanCanvasProps {
   onMoveItem: (itemId: string, xCm: number, yCm: number) => void;
   onPanChange: (pan: { x: number; y: number }) => void;
   onZoomChange: (zoom: number) => void;
-  onOpenRingMenu: (screenX: number, screenY: number, xCm: number, yCm: number) => void;
+  onOpenRingMenu: (
+    screenX: number,
+    screenY: number,
+    xCm: number,
+    yCm: number,
+    centerScreenX: number,
+    centerScreenY: number,
+  ) => void;
   onPlaceItem: (xCm: number, yCm: number) => void;
 }
 
@@ -110,6 +117,7 @@ export function FloorPlanCanvas({
       return;
     }
 
+    event.evt.preventDefault();
     longPressTriggeredRef.current = false;
     clearLongPress();
     const clientX = touch.clientX;
@@ -121,7 +129,14 @@ export function FloorPlanCanvas({
       const xCm = pxToCm((localX - stage.x()) / stage.scaleX());
       const yCm = pxToCm((localY - stage.y()) / stage.scaleY());
       longPressTriggeredRef.current = true;
-      onOpenRingMenu(clientX, clientY, xCm, yCm);
+      onOpenRingMenu(
+        clientX,
+        clientY,
+        xCm,
+        yCm,
+        containerRect.left + containerRect.width / 2,
+        containerRect.top + containerRect.height / 2,
+      );
     }, 380);
   };
 
@@ -191,6 +206,7 @@ export function FloorPlanCanvas({
         y={pan.y}
         draggable={!pendingPlacement}
         onDragEnd={(event) => onPanChange({ x: event.target.x(), y: event.target.y() })}
+        onContextMenu={(event) => event.evt.preventDefault()}
         onClick={handleBackgroundActivate}
         onTap={handleBackgroundActivate}
         onTouchStart={handleTouchStart}
@@ -281,6 +297,18 @@ export function FloorPlanCanvas({
               <Group
                 key={item.id}
                 draggable={!item.locked && !pendingPlacement}
+                onMouseDown={(event) => {
+                  event.cancelBubble = true;
+                  if (stageRef.current?.isDragging()) {
+                    stageRef.current.stopDrag();
+                  }
+                }}
+                onTouchStart={(event) => {
+                  event.cancelBubble = true;
+                  if (stageRef.current?.isDragging()) {
+                    stageRef.current.stopDrag();
+                  }
+                }}
                 onClick={() => {
                   if (!pendingPlacement) {
                     onSelectItem(item.id);

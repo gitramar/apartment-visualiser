@@ -166,14 +166,31 @@ export default function App() {
     setPendingPlacement(null);
   };
 
-  const handleOpenRingMenu = (screenX: number, screenY: number, xCm: number, yCm: number) => {
+  const handleOpenRingMenu = (
+    screenX: number,
+    screenY: number,
+    xCm: number,
+    yCm: number,
+    centerScreenX: number,
+    centerScreenY: number,
+  ) => {
     if (!isMobileViewport || pendingPlacement) {
       return;
     }
 
     setSelectedItemId(null);
     setMobilePanel(null);
-    setRingMenu({ screenX, screenY, xCm, yCm, highlightedLabel: null });
+    setPan((current) => ({
+      x: current.x + (centerScreenX - screenX),
+      y: current.y + (centerScreenY - screenY),
+    }));
+    setRingMenu({
+      screenX: centerScreenX,
+      screenY: centerScreenY,
+      xCm,
+      yCm,
+      highlightedLabel: null,
+    });
   };
 
   const handleRingMenuSelect = (draft: ItemDraft | null) => {

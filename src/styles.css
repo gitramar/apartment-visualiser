@@ -175,6 +175,9 @@ button {
   border: 1px solid rgba(142, 160, 177, 0.12);
   background: #0f1419;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .mobileSelectionBar,
@@ -217,6 +220,9 @@ button {
   inset: 0;
   z-index: 45;
   background: rgba(5, 8, 12, 0.18);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .ringMenu {
