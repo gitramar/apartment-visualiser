@@ -22,10 +22,13 @@ const initialDraft: ItemDraft = {
 interface ItemFormProps {
   nextItemLabel: string;
   onAdd: (draft: ItemDraft) => void;
+  compactMode?: boolean;
+  onPickPreset?: (draft: ItemDraft) => void;
 }
 
-export function ItemForm({ nextItemLabel, onAdd }: ItemFormProps) {
+export function ItemForm({ nextItemLabel, onAdd, compactMode = false, onPickPreset }: ItemFormProps) {
   const [draft, setDraft] = useState<ItemDraft>({ ...initialDraft, label: nextItemLabel });
+  const [showCustomForm, setShowCustomForm] = useState(!compactMode);
   const validation = useMemo(() => validateItemDraft(draft), [draft]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -43,81 +46,122 @@ export function ItemForm({ nextItemLabel, onAdd }: ItemFormProps) {
 
     onAdd(resolvedDraft);
     setDraft({ ...initialDraft, label: nextItemLabel });
+    if (compactMode) {
+      setShowCustomForm(false);
+    }
+  };
+
+  const handleAddPreset = (preset: ItemDraft) => {
+    if (compactMode && onPickPreset) {
+      onPickPreset(preset);
+      setShowCustomForm(false);
+      return;
+    }
+
+    onAdd(preset);
+    setDraft({ ...initialDraft, label: nextItemLabel });
+    if (compactMode) {
+      setShowCustomForm(false);
+    }
   };
 
   return (
     <form className="panelForm" onSubmit={handleSubmit}>
-      <div className="presetRow">
+      <div className={compactMode ? 'presetGrid' : 'presetRow'}>
         {PRESETS.map((preset) => (
           <button
-            className="chipButton"
+            className={compactMode ? 'presetCardButton' : 'chipButton'}
             key={preset.label}
-            type="button"
-            onClick={() => setDraft(preset)}
+            type={compactMode ? 'button' : 'button'}
+            onClick={() => (compactMode ? handleAddPreset(preset) : setDraft(preset))}
           >
-            {preset.label}
+            {compactMode ? (
+              <>
+                <span className="presetCardSwatch" style={{ background: preset.color }} />
+                <strong>{preset.label}</strong>
+                <small>
+                  {preset.widthCm} x {preset.heightCm} cm
+                </small>
+              </>
+            ) : (
+              preset.label
+            )}
           </button>
         ))}
       </div>
 
-      <label>
-        Label
-        <input
-          value={draft.label}
-          onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-          placeholder={nextItemLabel}
-        />
-        {validation.errors.label ? <span className="fieldError">{validation.errors.label}</span> : null}
-      </label>
+      {compactMode ? (
+        <button
+          className="secondaryButton"
+          type="button"
+          onClick={() => setShowCustomForm((current) => !current)}
+        >
+          {showCustomForm ? 'Hide Custom Item' : 'Custom Item'}
+        </button>
+      ) : null}
 
-      <div className="twoCol">
-        <label>
-          Width (cm)
-          <input
-            inputMode="numeric"
-            value={draft.widthCm}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, widthCm: event.target.value }))
-            }
-          />
-          {validation.errors.widthCm ? (
-            <span className="fieldError">{validation.errors.widthCm}</span>
-          ) : null}
-        </label>
-        <label>
-          Height (cm)
-          <input
-            inputMode="numeric"
-            value={draft.heightCm}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, heightCm: event.target.value }))
-            }
-          />
-          {validation.errors.heightCm ? (
-            <span className="fieldError">{validation.errors.heightCm}</span>
-          ) : null}
-        </label>
-      </div>
+      {!showCustomForm ? null : (
+        <>
+          <label>
+            Label
+            <input
+              value={draft.label}
+              onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
+              placeholder={nextItemLabel}
+            />
+            {validation.errors.label ? <span className="fieldError">{validation.errors.label}</span> : null}
+          </label>
 
-      <label>
-        Color
-        <div className="colorField">
-          <input
-            type="color"
-            value={draft.color.startsWith('#') ? draft.color : '#5f8f6e'}
-            onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
-          />
-          <input
-            value={draft.color}
-            onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
-          />
-        </div>
-        {validation.errors.color ? <span className="fieldError">{validation.errors.color}</span> : null}
-      </label>
+          <div className="twoCol">
+            <label>
+              Width (cm)
+              <input
+                inputMode="numeric"
+                value={draft.widthCm}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, widthCm: event.target.value }))
+                }
+              />
+              {validation.errors.widthCm ? (
+                <span className="fieldError">{validation.errors.widthCm}</span>
+              ) : null}
+            </label>
+            <label>
+              Height (cm)
+              <input
+                inputMode="numeric"
+                value={draft.heightCm}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, heightCm: event.target.value }))
+                }
+              />
+              {validation.errors.heightCm ? (
+                <span className="fieldError">{validation.errors.heightCm}</span>
+              ) : null}
+            </label>
+          </div>
 
-      <button className="primaryButton" type="submit">
-        Add Item
-      </button>
+          <label>
+            Color
+            <div className="colorField">
+              <input
+                type="color"
+                value={draft.color.startsWith('#') ? draft.color : '#5f8f6e'}
+                onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+              />
+              <input
+                value={draft.color}
+                onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
+              />
+            </div>
+            {validation.errors.color ? <span className="fieldError">{validation.errors.color}</span> : null}
+          </label>
+
+          <button className="primaryButton" type="submit">
+            Add Item
+          </button>
+        </>
+      )}
     </form>
   );
 }

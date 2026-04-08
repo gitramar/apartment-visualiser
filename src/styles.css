@@ -48,6 +48,12 @@ button {
   padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
 }
 
+.appShellFullscreen {
+  max-width: none;
+  min-height: 100vh;
+  padding: 0;
+}
+
 .topBar,
 .canvasPanel,
 .controlPanel {
@@ -73,6 +79,9 @@ button {
 .topBar h1 {
   margin: 0;
   font-size: 1.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .eyebrow {
@@ -91,7 +100,8 @@ button {
 .colorField,
 .toggleRow,
 .presetRow,
-.layoutActions {
+.layoutActions,
+.presetGrid {
   display: flex;
   gap: 8px;
 }
@@ -104,6 +114,7 @@ button {
 
 .topActions {
   align-items: center;
+  justify-content: flex-end;
 }
 
 .zoomControls {
@@ -122,6 +133,27 @@ button {
 
 .canvasPanel {
   padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.appShellFullscreen .plannerLayout {
+  min-height: 100vh;
+}
+
+.appShellFullscreen .canvasPanel {
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+  padding: 0;
+  background: #0a0f13;
+  box-shadow: none;
+  align-content: start;
+}
+
+.appShellFullscreen .canvasShell {
+  border-radius: 0;
+  border: 0;
 }
 
 .canvasMeta {
@@ -145,6 +177,40 @@ button {
   touch-action: none;
 }
 
+.mobileSelectionBar,
+.mobilePanelSheet,
+.mobileBottomBar {
+  display: none;
+}
+
+.placementBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(130, 214, 174, 0.12);
+  border: 1px solid rgba(130, 214, 174, 0.24);
+}
+
+.placementMeta {
+  display: grid;
+  gap: 2px;
+}
+
+.placementMeta span {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.fullscreenExitButton {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 40;
+}
+
 .controlPanel {
   position: sticky;
   bottom: 12px;
@@ -162,6 +228,7 @@ button {
 .primaryButton,
 .dangerButton,
 .chipButton,
+.presetCardButton,
 .layoutActions button,
 .fileButton {
   border: 1px solid transparent;
@@ -203,6 +270,33 @@ button {
   opacity: 0;
 }
 
+.presetCardButton {
+  min-height: 92px;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  background: #161e26;
+  border-color: rgba(142, 160, 177, 0.12);
+}
+
+.presetCardButton strong,
+.presetCardButton small {
+  line-height: 1.2;
+}
+
+.presetCardButton small {
+  color: var(--ink-soft);
+}
+
+.presetCardSwatch {
+  width: 28px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
 .tabPanel {
   padding-top: 12px;
 }
@@ -211,6 +305,15 @@ button {
 .layoutManager {
   display: grid;
   gap: 12px;
+}
+
+.actionRow {
+  align-items: center;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 label {
@@ -334,6 +437,10 @@ input {
     align-items: start;
   }
 
+  .appShellFullscreen .plannerLayout {
+    grid-template-columns: 1fr;
+  }
+
   .controlPanel {
     top: 12px;
     bottom: auto;
@@ -347,17 +454,19 @@ input {
 
 @media (max-width: 899px) {
   .appShell {
-    padding: 10px 10px calc(108px + env(safe-area-inset-bottom));
+    padding: 10px 10px calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .appShellFullscreen {
+    padding: 0;
   }
 
   .topBar {
     position: sticky;
     top: 0;
     z-index: 20;
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    margin: 0 -10px 10px;
-    padding: 14px 10px 12px;
+    margin-bottom: 10px;
+    padding: 12px;
     backdrop-filter: blur(14px);
   }
 
@@ -367,16 +476,16 @@ input {
 
   .topActions {
     width: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    justify-content: stretch;
   }
 
-  .topActions > .secondaryButton:first-child {
-    width: 100%;
+  .topActions > .secondaryButton:first-child,
+  .topActions > .secondaryButton:nth-child(2) {
+    flex: 1 1 auto;
   }
 
   .zoomControls {
-    justify-self: end;
+    margin-left: auto;
   }
 
   .zoomButton {
@@ -385,15 +494,11 @@ input {
   }
 
   .topActions > .secondaryButton:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .canvasPanel,
-  .controlPanel {
-    border-radius: 20px;
+    display: none;
   }
 
   .canvasPanel {
+    border-radius: 20px;
     padding: 10px;
   }
 
@@ -403,32 +508,160 @@ input {
     margin-bottom: 10px;
   }
 
+  .canvasMeta span:first-child {
+    max-width: calc(100vw - 160px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .controlPanel {
-    margin-top: 4px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    bottom: 0;
-    margin-left: -10px;
-    margin-right: -10px;
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(18, 24, 30, 0.98);
-    backdrop-filter: blur(18px);
-  }
-
-  .tabRow {
-    gap: 6px;
-    margin: 0 -2px;
-    padding-inline: 2px;
-    scrollbar-width: none;
-  }
-
-  .tabRow::-webkit-scrollbar {
     display: none;
   }
 
-  .tabButton {
-    flex: 1 0 auto;
-    min-width: 72px;
-    padding: 10px 12px;
+  .mobileSelectionBar {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 18px;
+    background: #141b22;
+    border: 1px solid rgba(142, 160, 177, 0.12);
+  }
+
+  .mobileSelectionMeta {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mobileSelectionMeta span {
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .mobileSelectionActions {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mobileSelectionActions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileSelectionActions button {
+    flex: 0 0 auto;
+  }
+
+  .placementBar {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .mobilePanelSheet {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    z-index: 25;
+    margin: 0 10px;
+    padding: 10px 10px 14px;
+    background: rgba(18, 24, 30, 0.98);
+    border: 1px solid var(--panel-border);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    max-height: min(52vh, 460px);
+    overflow: auto;
+  }
+
+  .mobileSheetHandle {
+    width: 44px;
+    height: 4px;
+    margin: 0 auto 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+.mobileSheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobileSheetActions {
+  display: flex;
+  gap: 8px;
+}
+
+  .mobileCloseButton {
+    min-height: 36px;
+    padding: 8px 12px;
+  }
+
+  .mobilePanelSheet .tabPanel {
+    padding-top: 10px;
+  }
+
+  .mobileBottomBar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 30;
+    padding: 10px;
+    background: rgba(15, 20, 25, 0.98);
+    border: 1px solid var(--panel-border);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobileBottomBar .tabButton {
+    min-width: 0;
+    min-height: 48px;
+    padding: 10px 8px;
+    font-size: 0.92rem;
+  }
+
+  .mobilePanelSheet .actionRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobilePanelSheet .fileButton,
+  .mobilePanelSheet .primaryButton,
+  .mobilePanelSheet .dangerButton,
+  .mobilePanelSheet .secondaryButton {
+    width: 100%;
+  }
+
+  .mobilePanelSheet .layoutActions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobilePanelSheet .presetRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .mobilePanelSheet .presetRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobilePanelSheet .presetGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobilePanelSheet .chipButton {
+    flex: 0 0 auto;
   }
 }

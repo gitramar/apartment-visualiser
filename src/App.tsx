@@ -16,15 +16,15 @@ import {
 import type { FurnitureItem, ItemDraft, LayoutRecord, PlannerStorageData, Rotation } from './types/planner';
 import { clampRectToBounds, getItemFootprint, getItemIssues } from './utils/geometry';
 import { makeId } from './utils/id';
-import { clampZoom, snapCmToGrid } from './utils/scale';
+import { clampZoom, cmToPx, snapCmToGrid } from './utils/scale';
 
 type TabId = 'add' | 'edit' | 'items' | 'layouts';
 
 const TAB_LABELS: Record<TabId, string> = {
   add: 'Add',
-  edit: 'Edit',
-  items: 'Items',
-  layouts: 'Layouts',
+  edit: 'Selected',
+  items: 'Library',
+  layouts: 'Plans',
 };
 
 function updateLayout(
@@ -41,15 +41,21 @@ function updateLayout(
 export default function App() {
   const [plannerData, setPlannerData] = useState<PlannerStorageData>(() => loadPlannerData());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('add');
+  const [activeTab, setActiveTab] = useState<TabId>(() => (window.innerWidth < 900 ? 'items' : 'add'));
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [panMode, setPanMode] = useState(false);
   const [pan, setPan] = useState({ x: 16, y: 16 });
   const [importError, setImportError] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState<number>(() => window.innerWidth);
+  const [viewportHeight, setViewportHeight] = useState<number>(() => window.innerHeight);
+  const [pendingPlacement, setPendingPlacement] = useState<ItemDraft | null>(null);
+  const isMobileViewport = viewportWidth < 900;
 
   useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
+    const onResize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -101,6 +107,51 @@ export default function App() {
 
     applyItems((items) => [...items, item]);
     setSelectedItemId(item.id);
+    if (isMobileViewport) {
+      setActiveTab('edit');
+    }
+  };
+
+  const handlePreparePlacement = (draft: ItemDraft) => {
+    setPendingPlacement(draft);
+    setSelectedItemId(null);
+    if (isMobileViewport) {
+      setActiveTab('items');
+    }
+  };
+
+  const handlePlacePendingItem = (xCm: number, yCm: number) => {
+    if (!pendingPlacement) {
+      return;
+    }
+
+    const widthCm = Number(pendingPlacement.widthCm);
+    const heightCm = Number(pendingPlacement.heightCm);
+    const clamped = clampRectToBounds(
+      {
+        xCm: snapCmToGrid(xCm - widthCm / 2),
+        yCm: snapCmToGrid(yCm - heightCm / 2),
+        widthCm,
+        heightCm,
+      },
+      floorPlanBoundsCm.width,
+      floorPlanBoundsCm.height,
+    );
+
+    const item: FurnitureItem = {
+      id: makeId('item'),
+      label: pendingPlacement.label.trim() || nextItemLabel,
+      widthCm,
+      heightCm,
+      color: pendingPlacement.color.trim(),
+      xCm: clamped.xCm,
+      yCm: clamped.yCm,
+      rotation: 0,
+    };
+
+    applyItems((items) => [...items, item]);
+    setSelectedItemId(null);
+    setPendingPlacement(null);
   };
 
   const handleItemChange = (itemId: string, patch: Partial<FurnitureItem>) => {
@@ -284,22 +335,123 @@ export default function App() {
 
   const handleSelectItem = (itemId: string | null) => {
     setSelectedItemId(itemId);
-    if (itemId && viewportWidth < 900) {
+    if (itemId && isMobileViewport) {
       setActiveTab('edit');
     }
   };
 
+  const closeMobilePanel = () => {
+    if (isMobileViewport) {
+      setActiveTab('items');
+    }
+  };
+
+  const handleZoomChange = (nextZoom: number) => {
+    setZoom(clampZoom(nextZoom));
+  };
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      return;
+    }
+
+    const stageWidth = viewportWidth;
+    const stageHeight = viewportHeight;
+    const planWidthPx = cmToPx(floorPlanBoundsCm.width);
+    const planHeightPx = cmToPx(floorPlanBoundsCm.height);
+    const padding = 32;
+    const fitZoom = clampZoom(
+      Math.min(
+        (stageWidth - padding * 2) / planWidthPx,
+        (stageHeight - padding * 2) / planHeightPx,
+      ),
+    );
+
+    setZoom(fitZoom);
+    setPan({
+      x: Math.round((stageWidth - planWidthPx * fitZoom) / 2),
+      y: Math.round((stageHeight - planHeightPx * fitZoom) / 2),
+    });
+  }, [isFullscreen, viewportWidth, viewportHeight]);
+
+  const mobilePanelTitle =
+    activeTab === 'add'
+      ? 'Add Furniture'
+      : activeTab === 'edit'
+        ? selectedItem
+          ? selectedItem.label
+          : 'Edit Item'
+        : activeTab === 'items'
+          ? 'Items'
+          : 'Layouts';
+
+  const panelContent = (
+    <div className="tabPanel">
+      {activeTab === 'add' ? (
+        <ItemForm
+          nextItemLabel={nextItemLabel}
+          onAdd={handleAddItem}
+          compactMode={isMobileViewport}
+          onPickPreset={handlePreparePlacement}
+        />
+      ) : null}
+      {activeTab === 'edit' ? (
+        <ItemEditor
+          item={selectedItem}
+          warning={selectedItemWarning}
+          onChange={handleItemChange}
+          onRotate={handleRotate}
+          onDuplicate={handleDuplicateItem}
+          onDelete={handleDeleteItem}
+        />
+      ) : null}
+      {activeTab === 'items' ? (
+        <ItemList
+          items={activeLayout.items}
+          selectedItemId={selectedItemId}
+          onSelect={(itemId) => {
+            setSelectedItemId(itemId);
+            setActiveTab('edit');
+          }}
+        />
+      ) : null}
+      {activeTab === 'layouts' ? (
+        <LayoutManager
+          layouts={plannerData.layouts}
+          activeLayoutId={plannerData.activeLayoutId}
+          importError={importError}
+          onSelect={(layoutId) => {
+            setPlannerData((current) => ({ ...current, activeLayoutId: layoutId }));
+            setSelectedItemId(null);
+            if (isMobileViewport) {
+              setActiveTab('items');
+            }
+          }}
+          onCreate={handleCreateLayout}
+          onRename={handleRenameLayout}
+          onDuplicate={handleDuplicateLayout}
+          onDelete={handleDeleteLayout}
+          onExport={() => exportPlannerData(plannerData)}
+          onImport={handleImport}
+        />
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="appShell">
+    <div className={`appShell ${isFullscreen ? 'appShellFullscreen' : ''}`}>
+      {!isFullscreen && !isMobileViewport ? (
       <header className="topBar">
         <div className="topBarTitle">
           <p className="eyebrow">Apartment Layout Planner</p>
           <h1>{activeLayout.name}</h1>
         </div>
         <div className="topActions">
-          <button className={panMode ? 'secondaryButton isActive' : 'secondaryButton'} type="button" onClick={() => setPanMode((current) => !current)}>
-            {panMode ? 'Canvas Pan On' : 'Pan Canvas'}
-          </button>
+          {isMobileViewport ? (
+            <button className={activeTab === 'layouts' ? 'secondaryButton isActive' : 'secondaryButton'} type="button" onClick={() => setActiveTab('layouts')}>
+              Plans
+            </button>
+          ) : null}
           <div className="zoomControls">
             <button className="secondaryButton zoomButton" type="button" onClick={() => setZoom((current) => clampZoom(current - 0.2))}>
               -
@@ -312,16 +464,22 @@ export default function App() {
           <button className="secondaryButton" type="button" onClick={() => { setZoom(1); setPan({ x: 16, y: 16 }); }}>
             Reset View
           </button>
+          <button className="secondaryButton" type="button" onClick={() => setIsFullscreen(true)}>
+            Full Screen
+          </button>
         </div>
       </header>
+      ) : null}
 
       <main className="plannerLayout">
         <section className="canvasPanel">
+          {!isFullscreen ? (
           <div className="canvasMeta">
-            <span>Grid: {CM_PER_GRID} cm cells</span>
+            <span>{activeLayout.name}</span>
             <span>{activeLayout.items.length} item(s)</span>
-            <span>Apartment Sketch</span>
+            <span>Grid: {CM_PER_GRID} cm</span>
           </div>
+          ) : null}
           <FloorPlanCanvas
             boundsCm={floorPlanBoundsCm}
             wallSegments={floorPlanWalls}
@@ -329,73 +487,115 @@ export default function App() {
             items={activeLayout.items}
             selectedItemId={selectedItemId}
             viewportWidth={viewportWidth}
+            viewportHeight={viewportHeight}
             zoom={zoom}
             pan={pan}
-            panMode={panMode}
+            isFullscreen={isFullscreen}
+            pendingPlacement={pendingPlacement}
             itemWarnings={itemIssues}
             onSelectItem={handleSelectItem}
             onMoveItem={handleMoveItem}
             onPanChange={setPan}
+            onZoomChange={handleZoomChange}
+            onPlaceItem={handlePlacePendingItem}
           />
-        </section>
 
-        <section className="controlPanel">
-          <div className="tabRow">
-            {(Object.keys(TAB_LABELS) as TabId[]).map((tabId) => (
-              <button
-                className={`tabButton ${activeTab === tabId ? 'tabButtonActive' : ''}`}
-                key={tabId}
-                type="button"
-                onClick={() => setActiveTab(tabId)}
-              >
-                {TAB_LABELS[tabId]}
+          {isFullscreen ? (
+            <button className="fullscreenExitButton" type="button" onClick={() => setIsFullscreen(false)}>
+              Exit Full Screen
+            </button>
+          ) : null}
+
+          {pendingPlacement && !isFullscreen ? (
+            <div className="placementBar">
+              <div className="placementMeta">
+                <strong>Placing {pendingPlacement.label}</strong>
+                <span>Tap anywhere on the plan to drop it.</span>
+              </div>
+              <button className="secondaryButton" type="button" onClick={() => setPendingPlacement(null)}>
+                Cancel
               </button>
-            ))}
-          </div>
+            </div>
+          ) : null}
 
-          <div className="tabPanel">
-            {activeTab === 'add' ? (
-              <ItemForm nextItemLabel={nextItemLabel} onAdd={handleAddItem} />
-            ) : null}
-            {activeTab === 'edit' ? (
-              <ItemEditor
-                item={selectedItem}
-                warning={selectedItemWarning}
-                onChange={handleItemChange}
-                onRotate={handleRotate}
-                onDuplicate={handleDuplicateItem}
-                onDelete={handleDeleteItem}
-              />
-            ) : null}
-            {activeTab === 'items' ? (
-              <ItemList
-                items={activeLayout.items}
-                selectedItemId={selectedItemId}
-                onSelect={(itemId) => {
-                  setSelectedItemId(itemId);
-                  setActiveTab('edit');
-                }}
-              />
-            ) : null}
-            {activeTab === 'layouts' ? (
-              <LayoutManager
-                layouts={plannerData.layouts}
-                activeLayoutId={plannerData.activeLayoutId}
-                importError={importError}
-                onSelect={(layoutId) => {
-                  setPlannerData((current) => ({ ...current, activeLayoutId: layoutId }));
-                  setSelectedItemId(null);
-                }}
-                onCreate={handleCreateLayout}
-                onRename={handleRenameLayout}
-                onDuplicate={handleDuplicateLayout}
-                onDelete={handleDeleteLayout}
-                onExport={() => exportPlannerData(plannerData)}
-                onImport={handleImport}
-              />
-            ) : null}
-          </div>
+          {isMobileViewport && selectedItem && !isFullscreen ? (
+            <div className="mobileSelectionBar">
+              <div className="mobileSelectionMeta">
+                <strong>{selectedItem.label}</strong>
+                <span>
+                  {Math.round(getItemFootprint(selectedItem).widthCm)} x{' '}
+                  {Math.round(getItemFootprint(selectedItem).heightCm)} cm
+                </span>
+              </div>
+              <div className="mobileSelectionActions">
+                <button className="secondaryButton" type="button" onClick={() => setActiveTab('edit')}>
+                  Details
+                </button>
+                <button className="secondaryButton" type="button" onClick={() => handleRotate(selectedItem.id)}>
+                  Rotate
+                </button>
+                <button className="secondaryButton" type="button" onClick={() => handleDuplicateItem(selectedItem.id)}>
+                  Copy
+                </button>
+                <button className="dangerButton" type="button" onClick={() => handleDeleteItem(selectedItem.id)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
+
+        {isFullscreen ? null : isMobileViewport ? (
+          <>
+            <div className="mobilePanelSheet">
+              <div className="mobileSheetHandle" />
+              <div className="mobileSheetHeader">
+                <strong>{mobilePanelTitle}</strong>
+                <div className="mobileSheetActions">
+                  <button className="secondaryButton mobileCloseButton" type="button" onClick={() => setIsFullscreen(true)}>
+                    Full Screen
+                  </button>
+                  {activeTab !== 'items' ? (
+                    <button className="secondaryButton mobileCloseButton" type="button" onClick={closeMobilePanel}>
+                      Close
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {panelContent}
+            </div>
+
+            <nav className="mobileBottomBar" aria-label="Planner actions">
+              {(['add', 'edit', 'items', 'layouts'] as TabId[]).map((tabId) => (
+                <button
+                  className={`tabButton ${activeTab === tabId ? 'tabButtonActive' : ''}`}
+                  key={tabId}
+                  type="button"
+                  onClick={() => setActiveTab(tabId)}
+                >
+                  {TAB_LABELS[tabId]}
+                </button>
+              ))}
+            </nav>
+          </>
+        ) : (
+          <section className="controlPanel">
+            <div className="tabRow">
+              {(Object.keys(TAB_LABELS) as TabId[]).map((tabId) => (
+                <button
+                  className={`tabButton ${activeTab === tabId ? 'tabButtonActive' : ''}`}
+                  key={tabId}
+                  type="button"
+                  onClick={() => setActiveTab(tabId)}
+                >
+                  {TAB_LABELS[tabId]}
+                </button>
+              ))}
+            </div>
+
+            {panelContent}
+          </section>
+        )}
       </main>
     </div>
   );
